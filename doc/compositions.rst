@@ -1,7 +1,7 @@
 Compositions
 ============
 
-.. module:: fun
+.. currentmodule:: fun
 
 .. function:: zip(...)
               iterator1:zip(iterator2, iterator3, ...)
@@ -51,7 +51,7 @@ Compositions
    ``{gen, param, state}``. The returned iterator is constant space and no
    return values are buffered. Instead of that the function make a clone of the
    source ``{gen, param, state}`` iterator. Therefore, the source iterator
-   must be pure functional to make an indentical clone. Infinity iterators
+   must be pure functional to make an identical clone. Infinity iterators
    are supported, but are not recommended.
 
    .. note:: ``{gen, param, state}`` must be pure functional to work properly

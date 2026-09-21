@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 --------------------------------------------------------------------------------
 -- filter
 --------------------------------------------------------------------------------
@@ -14,7 +15,7 @@ dump(filter(function(x) return x % 3 == 0 end, range(0)))
 --test]]
 
 
-dump(take(5, filter(function(i, x) return i % 3 == 0 end,
+dump(take(5, filter(function(i, _x) return i % 3 == 0 end,
     enumerate(duplicate('x')))))
 --[[test
 3 x
@@ -24,7 +25,7 @@ dump(take(5, filter(function(i, x) return i % 3 == 0 end,
 15 x
 --test]]
 
-function filter_fun(a, b, c)
+function filter_fun(a, _b, _c)
     if a % 16 == 0 then
         return true
     else
@@ -49,6 +50,13 @@ print(remove_if == filter) -- an alias
 true
 --test]]
 
+dump_state(filter(function(x) return x % 2 == 0 end, ipairs({0, 1, 1, 2, 3, 4})))
+--[[test
+1
+4
+6
+--test]]
+
 --------------------------------------------------------------------------------
 -- grep
 --------------------------------------------------------------------------------
@@ -65,11 +73,13 @@ lines_to_grep = {
 }
 
 dump(grep("lab", lines_to_grep))
+-- luacheck: push ignore 614
 --[[test
 sed do eiusmod tempor incididunt ut labore et dolore magna 
 ullamco laboris nisi ut aliquip ex ea commodo consequat.
 deserunt mollit anim id est laborum.
 --test]]
+-- luacheck: pop
 
 lines_to_grep = {
     [[Emily]],
@@ -90,11 +100,17 @@ Emily
 Emma
 --test]]
 
+dump_state(grep("^Em", lines_to_grep))
+--[[test
+1
+5
+--test]]
+
 --------------------------------------------------------------------------------
 -- partition
 --------------------------------------------------------------------------------
 
-dump(zip(partition(function(i, x) return i % 3 == 0 end, range(10))))
+dump(zip(partition(function(i, _x) return i % 3 == 0 end, range(10))))
 --[[test
 3 1
 6 2

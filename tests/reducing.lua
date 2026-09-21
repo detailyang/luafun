@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 --------------------------------------------------------------------------------
 -- foldl
 --------------------------------------------------------------------------------
@@ -41,6 +42,19 @@ print(length(range(0)))
 --[[test
 0
 --test]]
+
+-- gh-55: consider input iterator state in array/string optimizations
+print(length(drop_n(3, {"a", "b", "c", "d", "e"})))
+--[[test
+2
+--test]]
+
+-- gh-55: consider input iterator state in array/string optimizations
+print(length(drop_n(3, "abcdef")))
+--[[test
+3
+--test]]
+
 
 --------------------------------------------------------------------------------
 -- is_null
@@ -97,6 +111,21 @@ print(is_prefix_of({"a"}, {}))
 false
 --test]]
 
+print(is_prefix_of({"a"}, {"b"}))
+--[[test
+false
+--test]]
+
+print(is_prefix_of({"a", "b"}, {"a", "c"}))
+--[[test
+false
+--test]]
+
+print(is_prefix_of({"a", "b", "c"}, {"a", "b"}))
+--[[test
+false
+--test]]
+
 print(is_prefix_of(range(5), range(6)))
 --[[test
 true
@@ -105,6 +134,53 @@ true
 print(is_prefix_of(range(6), range(5)))
 --[[test
 false
+--test]]
+
+print(is_prefix_of(range(15), range(15)))
+--[[test
+true
+--test]]
+
+print(is_prefix_of(range(21), range(20)))
+--[[test
+false
+--test]]
+
+print(is_prefix_of(range(15), range(20)))
+--[[test
+true
+--test]]
+
+print(is_prefix_of(
+    range(3):map(function(v) return v < 3 and v or nil end), -- {1, 2, nil}
+    { 1, 2 }
+))
+--[[test
+false
+--test]]
+
+local function range_once(stop)
+    local v = 0
+    return function()
+        v = v + 1
+        if v <= stop then
+            return v, v
+        end
+
+        return nil
+    end
+end
+
+local prefix = range_once(2) -- null expected
+local iterator = range_once(3) -- trimmed prefix expected
+
+print(is_prefix_of(wrap(prefix), wrap(iterator)))
+print(is_null(prefix))
+print((iterator()))
+--[[test
+true
+true
+3
 --test]]
 
 --------------------------------------------------------------------------------
@@ -283,7 +359,7 @@ print(max_by(max_cmp, {}))
 error: max: iterator is empty
 --test]]
 
-print(maximum_by == maximum_by) -- an alias
+print(maximum_by == max_by) -- an alias
 --[[test
 true
 --test]]

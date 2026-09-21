@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 --------------------------------------------------------------------------------
 -- nth
 --------------------------------------------------------------------------------
@@ -50,6 +51,18 @@ error: invalid first argument to nth
 print(nth(7, "abcdef"))
 --[[test
 nil
+--test]]
+
+-- gh-55: consider input iterator state in array/string optimizations
+print(nth(1, drop_n(3, {"a", "b", "c", "d", "e"})))
+--[[test
+d
+--test]]
+
+-- gh-55: consider input iterator state in array/string optimizations
+print(nth(1, drop_n(3, "abcdef")))
+--[[test
+d
 --test]]
 
 --------------------------------------------------------------------------------
@@ -109,6 +122,14 @@ dump(tail(enumerate({"a", "b"})))
 print(cdr == tail) -- an alias
 --[[test
 true
+--test]]
+
+dump_state(tail(ipairs({"a", "b", "c", "d", "e"})))
+--[[test
+2
+3
+4
+5
 --test]]
 
 
@@ -172,6 +193,14 @@ dump(take_while(function(i, a) return i ~=a end, enumerate({5, 2, 1, 3, 4})))
 1 5
 --test]]
 
+dump_state(take_while(function(x) return x < 3 end, ipairs({0, 0, 0, 2, 3})))
+--[[test
+1
+2
+3
+4
+--test]]
+
 --------------------------------------------------------------------------------
 -- take
 --------------------------------------------------------------------------------
@@ -226,6 +255,12 @@ dump(drop_n(2, enumerate({'a', 'b', 'c', 'd', 'e'})))
 5 e
 --test]]
 
+dump_state(drop_n(3, ipairs({'a', 'b', 'c', 'd', 'e'})))
+--[[test
+4
+5
+--test]]
+
 --------------------------------------------------------------------------------
 -- drop_while
 --------------------------------------------------------------------------------
@@ -272,6 +307,12 @@ dump(drop_while(function(i, a) return i ~=a end,
 3 3
 4 2
 5 1
+--test]]
+
+dump_state(drop_while(function(x) return x < 5 end, ipairs({0, 0, 4, 6, 2})))
+--[[test
+4
+5
 --test]]
 
 --------------------------------------------------------------------------------

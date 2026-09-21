@@ -1,7 +1,7 @@
 Reducing
 ========
 
-.. module:: fun
+.. currentmodule:: fun
 
 The section contains functions to analyze iteration values and recombine
 through use of a given combining operation the results of recursively processing
@@ -55,10 +55,7 @@ Folds
 .. function:: length(gen, param, state)
               iterator:length()
 
-   :returns: a number of elements in ``gen, param, state`` iterator.
-
-   Return a number of elements in ``gen, param, state`` iterator.
-   This function is equivalent to ``#obj`` for basic array and string iterators.
+   Return a number of remaining elements in ``gen, param, state`` iterator.
 
    Examples:
 
@@ -66,6 +63,9 @@ Folds
 
     > print(length({"a", "b", "c", "d", "e"}))
     5
+
+    > print(length(drop_n(3, {"a", "b", "c", "d", "e"})))
+    2
 
     > print(length({}))
     0
@@ -77,7 +77,7 @@ Folds
                 result an infinite loop.
 
    .. note:: This function has ``O(n)`` complexity for all iterators except
-             basic array and string iterators.
+             basic array and string iterators, where it has ``O(1)`` complexity.
 
 .. function:: totable(gen, param, state)
 
@@ -241,7 +241,7 @@ Special folds
               iterator:min()
 
    Return a minimum value from the iterator using :func:`operator.min` or ``<``
-   for numbers and other types respectivly. The iterator must be
+   for numbers and other types respectively. The iterator must be
    non-null, otherwise an error is raised.
 
    Examples:
@@ -283,7 +283,7 @@ Special folds
               iterator:max()
 
    Return a maximum value from the iterator using :func:`operator.max` or ``>``
-   for numbers and other types respectivly.
+   for numbers and other types respectively.
 
    The iterator must be non-null, otherwise an error is raised.
 

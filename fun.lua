@@ -12,6 +12,17 @@ local methods = {}
 -- compatibility with Lua 5.1/5.2
 local unpack = rawget(table, "unpack") or unpack
 
+-- table.maxn was removed in Lua 5.3+
+local maxn = table.maxn or function(t)
+    local maxn = 0.0
+    for k in pairs(t) do
+        if type(k) == "number" and k > maxn then
+            maxn = k
+        end
+    end
+    return maxn
+end
+
 --------------------------------------------------------------------------------
 -- Tools
 --------------------------------------------------------------------------------
@@ -49,7 +60,7 @@ local iterator_mt = {
     __call = function(self, param, state)
         return self.gen(param, state)
     end;
-    __tostring = function(self)
+    __tostring = function(_self)
         return '<generator>'
     end;
     -- add all exported methods
@@ -91,7 +102,6 @@ local ipairs_gen = ipairs({}) -- get the generating function from ipairs
 
 local pairs_gen = pairs({ a = 0 }) -- get the generating function from pairs
 local map_gen = function(tab, key)
-    local value
     local key, value = pairs_gen(tab, key)
     return key, key, value
 end
@@ -295,19 +305,21 @@ exports.rands = rands
 -- Slicing
 --------------------------------------------------------------------------------
 
+---@param n integer
+---@param state_x integer
 local nth = function(n, gen_x, param_x, state_x)
     assert(n > 0, "invalid first argument to nth")
     -- An optimization for arrays and strings
     if gen_x == ipairs_gen then
-        return param_x[n]
+        return param_x[state_x + n]
     elseif gen_x == string_gen then
-        if n <= #param_x then
-            return string.sub(param_x, n, n)
+        if state_x + n <= #param_x then
+            return string.sub(param_x, state_x + n, state_x + n)
         else
             return nil
         end
     end
-    for i=1,n-1,1 do
+    for _=1,n-1,1 do
         state_x = gen_x(param_x, state_x)
         if state_x == nil then
             return nil
@@ -399,8 +411,7 @@ exports.take = export1(take)
 
 local drop_n = function(n, gen, param, state)
     assert(n >= 0, "invalid first argument to drop_n")
-    local i
-    for i=1,n,1 do
+    for _=1,n,1 do
         state = gen(param, state)
         if state == nil then
             return wrap(nil_gen, nil, nil)
@@ -411,24 +422,41 @@ end
 methods.drop_n = method1(drop_n)
 exports.drop_n = export1(drop_n)
 
-local drop_while_x = function(fun, state_x, ...)
-    if state_x == nil or not fun(...) then
-        return state_x, false
+-- Unpack values from param[3] on the first iteration, then return
+-- values from the provided iterator.
+--
+-- A generator function for drop_while().
+local drop_while_gen = function(param, state)
+    local results = param[3]
+    if not results then
+        return param[1](param[2], state)
+    else
+        param[3] = nil
+        return state, unpack(results, 1, maxn(results))
     end
-    return state_x, true, ...
+end
+
+-- Checks if drop_while should continue skipping. If iterator is not exhausted
+-- and skipping is over, elements returned by iterator are wrapped into a table
+-- and returned as the second return value. Note that a table is created only
+-- once, on the last iteration, for the sake of performance.
+local drop_while_x = function(fun, state_x, ...)
+    if state_x ~= nil and not fun(...) then
+        return state_x, {...}
+    end
+    return state_x
 end
 
 local drop_while = function(fun, gen_x, param_x, state_x)
     assert(type(fun) == "function", "invalid first argument to drop_while")
-    local cont, state_x_prev
-    repeat
-        state_x_prev = deepcopy(state_x)
-        state_x, cont = drop_while_x(fun, gen_x(param_x, state_x))
-    until not cont
+    local pivot = nil
+    while state_x ~= nil and pivot == nil do
+        state_x, pivot = drop_while_x(fun, gen_x(param_x, state_x))
+    end
     if state_x == nil then
         return wrap(nil_gen, nil, nil)
     end
-    return wrap(gen_x, param_x, state_x_prev)
+    return wrap(drop_while_gen, {gen_x, param_x, pivot}, state_x)
 end
 methods.drop_while = method1(drop_while)
 exports.drop_while = export1(drop_while)
@@ -518,6 +546,7 @@ end
 -- call each other
 local filterm_gen
 local filterm_gen_shrink = function(fun, gen_x, param_x, state_x)
+    ---@diagnostic disable-next-line: need-check-nil
     return filterm_gen(fun, gen_x, param_x, gen_x(param_x, state_x))
 end
 
@@ -599,7 +628,7 @@ exports.reduce = exports.foldl
 
 local length = function(gen, param, state)
     if gen == ipairs_gen or gen == string_gen then
-        return #param
+        return #param - state
     end
     local len = 0
     repeat
@@ -622,16 +651,16 @@ local is_prefix_of = function(iter_x, iter_y)
     local gen_y, param_y, state_y = iter(iter_y)
 
     local r_x, r_y
-    for i=1,10,1 do
+    repeat
         state_x, r_x = gen_x(param_x, state_x)
-        state_y, r_y = gen_y(param_y, state_y)
         if state_x == nil then
             return true
         end
-        if state_y == nil or r_x ~= r_y then
-            return false
-        end
-    end
+
+        state_y, r_y = gen_y(param_y, state_y)
+    until state_y == nil or r_x ~= r_y
+
+    return false
 end
 methods.is_prefix_of = is_prefix_of
 exports.is_prefix_of = is_prefix_of
@@ -769,11 +798,11 @@ local max_by = function(cmp, gen_x, param_x, state_x)
 end
 methods.max_by = method1(max_by)
 exports.max_by = export1(max_by)
-methods.maximum_by = methods.maximum_by
-exports.maximum_by = exports.maximum_by
+methods.maximum_by = methods.max_by
+exports.maximum_by = exports.max_by
 
 local totable = function(gen_x, param_x, state_x)
-    local tab, key, val = {}
+    local tab, val = {}
     while true do
         state_x, val = gen_x(param_x, state_x)
         if state_x == nil then
@@ -815,7 +844,7 @@ end
 methods.map = method1(map)
 exports.map = export1(map)
 
-local enumerate_gen_call = function(state, i, state_x, ...)
+local enumerate_gen_call = function(_state, i, state_x, ...)
     if state_x == nil then
         return nil
     end
@@ -904,7 +933,7 @@ local zip = function(...)
     local param = { [2 * n] = 0 }
     local state = { [n] = 0 }
 
-    local i, gen_x, param_x, state_x
+    local gen_x, param_x, state_x
     for i=1,n,1 do
         local it = select(n - i + 1, ...)
         gen_x, param_x, state_x = rawiter(it)
@@ -927,7 +956,7 @@ local cycle_gen_call = function(param, state_x, ...)
 end
 
 local cycle_gen = function(param, state_x)
-    local gen_x, param_x, state_x0 = param[1], param[2], param[3]
+    local gen_x, param_x = param[1], param[2]
     return cycle_gen_call(param, gen_x(param_x, state_x))
 end
 
@@ -943,17 +972,17 @@ local chain_gen_r2 = function(param, state, state_x, ...)
     if state_x == nil then
         local i = state[1]
         i = i + 1
-        if param[3 * i - 1] == nil then
+        if param[3 * i - 2] == nil then
             return nil
         end
-        local state_x = param[3 * i]
-        return chain_gen_r1(param, {i, state_x})
+        ---@diagnostic disable-next-line: need-check-nil
+        return chain_gen_r1(param, {i, param[3 * i]})
     end
     return {state[1], state_x}, ...
 end
 
 chain_gen_r1 = function(param, state)
-    local i, state_x = state[1], state[2]
+    local i = state[1]
     local gen_x, param_x = param[3 * i - 2], param[3 * i - 1]
     return chain_gen_r2(param, state, gen_x(param_x, state[2]))
 end
@@ -965,7 +994,7 @@ local chain = function(...)
     end
 
     local param = { [3 * n] = 0 }
-    local i, gen_x, param_x, state_x
+    local gen_x, param_x, state_x
     for i=1,n,1 do
         local elem = select(i, ...)
         gen_x, param_x, state_x = iter(elem)
@@ -1040,16 +1069,16 @@ methods.op = operator
 setmetatable(exports, {
     __call = function(t, override)
         for k, v in pairs(t) do
-            if _G[k] ~= nil then
+            if rawget(_G, k) ~= nil then
                 local msg = 'function ' .. k .. ' already exists in global scope.'
                 if override then
-                    _G[k] = v
+                    rawset(_G, k, v)
                     print('WARNING: ' .. msg .. ' Overwritten.')
                 else
                     print('NOTICE: ' .. msg .. ' Skipped.')
                 end
             else
-                _G[k] = v
+                rawset(_G, k, v)
             end
         end
     end,
